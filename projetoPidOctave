@@ -1,0 +1,139 @@
+﻿clear all;
+close all;
+clc;
+
+
+% PARÂMETROS DO SISTEMA
+
+
+Ts = 0.4;                 % tempo de amostragem (igual ao Arduino)
+tempo_total = 200;        % duração da simulação (segundos)
+N = tempo_total / Ts;     
+
+% SETPOINT
+setpoint = 32;
+
+% Planta térmica simplificada (modelo aproximado)
+T = 28;                   % temperatura inicial
+ambiente = 28;            % temperatura ambiente
+
+% Constantes da planta
+coef_aquecimento = 0.02;  % tendência natural de aquecer
+coef_resfriamento = 0.12; % força da ventoinha para reduzir temperatura
+
+
+% PARÂMETROS PID (mesmos do Arduino)
+
+
+Kp = 140;
+Ki = 0.6;
+Kd = 3;
+
+% Modo REVERSE -> erro invertido
+reverse = 1;
+
+
+% ESTADOS DO PID
+
+erro_anterior = 0;
+integral = 0;
+
+% PWM limites
+PWM_min = 245;
+PWM_max = 255;
+
+% Vetores para gráficos
+tempo = zeros(1, N);
+temperatura = zeros(1, N);
+erro_hist = zeros(1, N);
+pwm_hist = zeros(1, N);
+
+% INÍCIO DA SIMULAÇÃO
+
+for k = 1:N
+
+    % CALCULA O ERRO
+    erro = setpoint - T;
+
+    if reverse
+        erro = -erro;
+    end
+
+    % TERMO PROPORCIONAL
+    P = Kp * erro;
+
+    % TERMO INTEGRAL
+    integral = integral + erro * Ts;
+    I = Ki * integral;
+
+    % TERMO DERIVATIVO
+    derivada = (erro - erro_anterior) / Ts;
+    D = Kd * derivada;
+
+    % SAÍDA DO PID
+    pwm = P + I + D;
+
+    % SALVA ERRO
+    erro_anterior = erro;
+
+    % FAZ SATURAÇÃO DO PWM
+    if pwm < PWM_min
+        pwm = PWM_min;
+    end
+    if pwm > PWM_max
+        pwm = PWM_max;
+    end
+
+    % DESLIGA A FAN SE T < 31°C
+    if T < 31
+        pwm = 0;
+    end
+
+    % MODELO DA TEMPERATURA
+
+    if pwm > 0
+        % ventoinha resfria
+        T = T - coef_resfriamento * ((pwm - PWM_min) / (PWM_max - PWM_min) + 0.2);
+    else
+        % aquecimento natural
+        T = T + coef_aquecimento;
+    end
+
+    % LIMITES FÍSICOS
+    if T < ambiente
+        T = ambiente;
+    end
+
+    % SALVAR PARA GRÁFICOS
+    tempo(k) = k * Ts;
+    temperatura(k) = T;
+    erro_hist(k) = erro;
+    pwm_hist(k) = pwm;
+
+end
+
+% GRÁFICOS
+
+figure(1);
+plot(tempo, temperatura, "linewidth", 2);
+hold on;
+yline(setpoint, "r--", "Setpoint 32°C");
+xlabel("Tempo (s)");
+ylabel("Temperatura (°C)");
+title("Resposta do Sistema Térmico com Controle PID");
+grid on;
+
+figure(2);
+plot(tempo, pwm_hist, "linewidth", 2);
+xlabel("Tempo (s)");
+ylabel("PWM (0–255)");
+title("Sinal de Controle (PWM)");
+grid on;
+
+figure(3);
+plot(tempo, erro_hist, "linewidth", 2);
+xlabel("Tempo (s)");
+ylabel("Erro");
+title("Erro de Controle");
+grid on;
+
