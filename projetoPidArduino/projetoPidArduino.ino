@@ -124,9 +124,7 @@ void loop() {
 
   int rpm = (int)rpmSuave;
 
-  // -----------------------
   // LCD
-  // -----------------------
   lcd.setCursor(0, 0);
   lcd.print("Temp: ");
   lcd.print(tempAtual, 1);
